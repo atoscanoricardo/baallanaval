@@ -1,0 +1,239 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>Socket.IO chat</title>
+    <style>
+        td {
+            border: 1px solid black;
+            width: 30px;
+            height: 30px;
+            background-color: cornflowerblue;
+        }
+        
+        div.double {
+            border-style: double;
+            margin: 5px;
+            padding: 5px;
+        }
+        
+        li.dotted {
+            border-style: dotted;
+            border-width: thin;
+            list-style-type: none;
+            border-color: darkcyan;
+            padding: 2px;
+            cursor: pointer;
+        }
+    </style>
+
+</head>
+
+<body>
+    <div id="app">
+        <div class="col-md-9 double">
+            Usuario : {{playerId}}
+            <button @click="newRoom">Nueva sala</button> {{newRoomId}}
+        </div>
+
+        <div class="col-md-3 double">
+            <h3>Salas disponibles</h3>
+
+            <ul v-bind="rooms" v-for="(room, i) in rooms" :key="i">
+                <li class="dotted" @click="joinRoom(room.id)">
+                    {{room.id}}
+                </li>
+            </ul>
+        </div>
+        <div>
+            Usuarios en esta sala {{roomSelected.players}}
+            <ul v-for="(player, i) in roomSelected.players" :key="i">
+                <li class="dotted">
+                    <br>{{player.name}}
+                    <br>{{player.isAlive}}
+                    <table>
+                        <tbody>
+                            <tr v-for="(row, x) in player.board">
+                                <td v-for="(cell, y) in row" @click="shot(i, x,y)">{{cell}}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </li>
+            </ul>
+        </div>
+
+        <label>{{latency}}</label>
+    </div>
+    <!--div id="app">
+        <label v-for="(player, p) in players">
+            <table>
+                <tbody>
+                    <tr v-for="(row, x) in player.board">
+                        <td v-for="(cell, y) in row" @click="shot(x,y)">{{cell}}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </label>
+        
+        <br>
+        <select @change="onChangeRoom($event)">{{rooms}}
+            <option selected>Selecciona una sala</option>
+            <option v-for="room in rooms" :value="room.id">
+              {{room.id}}
+            </option>
+          </select>
+        <button @click="joinRoom">Ir a la sala {{roomSelected}}</button>
+        <div>
+            <ul>
+                <li v-for="(alert, i) in alerts">
+                    {{ alert }}
+                </li>
+            </ul>
+        </div>
+    </div-->
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.5.16/vue.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        new Vue({
+            el: "#app",
+            data() {
+                return {
+                    playerId: '',
+                    players: [],
+                    rooms: [],
+                    newRoomId: '',
+                    roomSelected: '',
+                    alerts: [],
+                    latency: ''
+                }
+            },
+            mounted: function() {
+                this.socket = io('http://localhost:3000')
+
+                var startTime;
+
+                setInterval(() => {
+                    startTime = Date.now();
+                    this.socket.emit('setPing');
+                }, 2000);
+
+                this.socket.on('setPong', (data) => {
+                    this.latency = Date.now() - startTime;
+                    this.rooms = data.rooms;
+                });
+
+                this.socket.on('connect', () => {
+                    console.log(this.socket.id)
+                    this.playerId = this.socket.id
+                    this.socket['playerId'] = this.playerId;
+                })
+
+                this.socket.on('disconnect', () => {
+                    console.log(this.playerId, this.roomSelected)
+                    this.socket.emit('removeFromRoom', {
+                        playerId: this.playerId,
+                        roomSelected: this.roomSelected
+                    });
+                });
+
+                this.socket.on('connect_timeout', (timeout) => {
+                    console.log('connect_timeout: ' + timeout)
+                })
+
+                this.socket.on("initGame", (data) => {
+                    this.rooms = data.rooms
+
+                })
+
+                this.socket.on("setNewRoom", (data) => {
+                    this.newRoomId = data.newRoomId
+                    this.rooms = data.rooms
+                })
+
+                this.socket.on("setRoomActive", (roomActive) => {
+                    var {
+                        index,
+                        rooms,
+                        idRoom
+                    } = roomActive;
+                    this.index = index;
+                    this.rooms[index] = rooms[index];
+                    this.roomSelected = rooms[index];
+                })
+
+                this.socket.on('repaint', (data) => {
+                        console.log(data)
+                        this.rooms[data.index] = data.room;
+                        this.roomSelected = data.room;
+                    })
+                    /*this.socket.on('ping', (data) => {
+                        this.socket.emit('pong', {
+                            beat: 1
+                        });
+                    });*/
+                    //se reciben los datos de la nueva sala creada
+
+                /*
+                
+
+                    this.socket.on("Bienvenida", function(msg) {
+                        console.log(msg)
+                    })
+
+                    this.socket.on("setRooms", (rooms) => {
+                        console.log(rooms)
+                        this.rooms = rooms
+                    })
+
+                    this.socket.on("getNewRoom", (newRoomId) => {
+                        this.newRoomId = newRoomId
+                    })
+
+                    
+
+                    this.socket.on('alertNewUser', (msg) => {
+                        this.alerts.push(msg);
+                    })
+
+                    this.socket.on("connection", function(players) {
+                        //this.players = board
+                    });
+
+                    this.socket.on('startGame', function(players) {
+                        console.log(players)
+                        this.players = players
+                    })*/
+
+            },
+            methods: {
+                newRoom() {
+                    this.socket.emit('newRoom');
+                },
+                joinRoom(idRoom) {
+                    this.socket.emit('joinRoom', idRoom)
+                },
+                shot(i, x, y) {
+                    this.socket.emit('shot', {
+                        i: i,
+                        x: x,
+                        y: y,
+                        index: this.index
+                    });
+                },
+                /*reset() {
+                    this.socket.emit('reset');
+                },
+                ,
+                joinRoom() {
+                    this.socket.emit('joinRoom', this.roomSelected);
+                },
+                onChangeRoom(event) {
+                    roomSelected = event.target.value
+                }*/
+            },
+        })
+    </script>
+</body>
+
+</html>
